@@ -7,8 +7,6 @@ from collections import defaultdict
 class OpenList():
     """list of pages to be searched"""
 
-    DUPLICATE_SUBTRACTING_FACTOR = 0.5;
-
     def __init__(self):
         self.heap = []
         self.map = {}
@@ -17,9 +15,8 @@ class OpenList():
     def push(self, node):
         if node.link_text in self.map:
             existing_node = self.map[node.link_text]
-            average_score = ( node.score + existing_node.score ) / 2
-            existing_node.score = max( average_score - OpenList.DUPLICATE_sUBTRACTING_FACTOR, 0.0 )
-            self._heapify() # after changing the score we must re-heapify
+            existing_node.update_open_list_key_to_merge_duplicate(node)
+            self._heapify() # after changing the open list key we must re-heapify
         else:
             heapq.heappush(self.heap, node)
             self.map[node.link_text] = node
@@ -30,8 +27,7 @@ class OpenList():
         for node in nodes:
             if node.link_text in self.map:
                 existing_node = self.map[node.link_text]
-                average_score = ( node.score + existing_node.score ) / 2
-                existing_node.score = max( average_score - OpenList.DUPLICATE_SUBTRACTING_FACTOR, 0.0 )
+                existing_node.update_open_list_key_to_merge_duplicate(node)
                 must_heapify = True
             else:
                 heapq.heappush(self.heap, node)
@@ -138,11 +134,14 @@ class ClosedList():
 
 class ResultDataPoint():
 
-    def __init__(self, link_text, page, score):
-        self.count = page.html.count(link_text)
-        self.position = page.first_position_of_link_text(link_text)
-        self.score = score
-        self.text = link_text + " - " + page.title + " - " + str(self.score)
+    def __init__(self, container, score_override=None):
+        self.count = container.calculate_feature__count()
+        self.position = container.calculate_feature__position()
+        if not score_override == None:
+            self.score = score_override
+        else:
+            self.score = container.score
+        self.text = container.prev.page.title + " -> " + container.link_text + ": " + str(self.score)
 
 class Results():
 
@@ -158,16 +157,14 @@ class Results():
         return(0)
 
     def learn_succesful_chain(self, container, verbose = False):
-        loop_container = container.prev
-        loop_link_text = container.link_text
+        loop = container
         chain_depth = container.depth() + 1
-        while not loop_container.prev == None:
-            score = ( chain_depth + loop_container.score ) / 2.0
-            self.data.append(ResultDataPoint(loop_link_text, loop_container.page, score))
+        while not loop.prev.prev == None:
+            score = chain_depth + loop.score
+            self.data.append(ResultDataPoint(loop))
             if verbose:
-                print("learnt: " + loop_link_text + " from the successful chain.")
-            loop_link_text = loop_container.link_text
-            loop_container = loop_container.prev
+                print("learnt: " + loop.link_text + " from the successful chain.")
+            loop = loop.prev
 
     def learn_selection_useless_requests(self, useless_requests, verbose = False):
         count = self._useless_requests_learn_count(useless_requests)
@@ -175,7 +172,7 @@ class Results():
         while learnt_count < count:
             try:
                 random_container = useless_requests.pop_random()
-                self.data.append(ResultDataPoint(random_container.link_text, random_container.prev.page, 10))
+                self.data.append(ResultDataPoint(random_container, score_override=LinkPageContainer.MAX_DEFAULT_CLASS))
                 if verbose:
                     print("learnt: " + random_container.link_text + " from the useless requests.")
                 learnt_count += 1

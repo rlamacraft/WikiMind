@@ -10,7 +10,8 @@ from enum import Enum
 class LinkPageContainer:
     """Wrapper container for a link, its parsed page, and associated data. Acts as a single node in a chain of links."""
 
-    MAX_DEFAULT_SCORE = 10
+    MAX_DEFAULT_CLASS = 100
+    DUPLICATE_SUBTRACTING_FACTOR = 0.2
 
     def __init__(self, link_text = None, page = None, prev = None, score= None):
         if not link_text == None:
@@ -30,7 +31,7 @@ class LinkPageContainer:
 
     def __lt__(self, other):
         """comparator, so that containers can be used as nodes of a heap, which is the implementation of the open list"""
-        return(self.score < other.score)
+        return(self.open_list_key < other.open_list_key)
 
     def chain_equals(self, other_container):
         """Checks if the chain, starting at self and ending at a None node, is equal to another passed chain"""
@@ -62,13 +63,31 @@ class LinkPageContainer:
             a = a.prev
         return(count)
 
-    def calculate_score(self, classifier):
-        """Calculates the score of the current link based on the data collected and passing it to machine-learning classifier"""
-        if self.prev == None or self.link_text == None:
-            self.score = LinkPageContainer.MAX_DEFAULT_SCORE
-        position = self.prev.page.first_position_of_link_text(self.link_text)
-        count = self.prev.page.num_of_occurance_of_link_text(self.link_text)
-        self.score = classifier.predict([count, position])
+    def _classify_link(self, classifier):
+        """Classify the current link, based on the data collected, using the machine-learning classifier"""
+        if self.prev == None or self.link_text == None or self.prev.page == None:
+            return(LinkPageContainer.MAX_DEFAULT_CLASS)
+        position = self.calculate_feature__position()
+        count = self.calculate_feature__count()
+        return(classifier.predict([count, position]))
+
+    def calculate_feature__position(self):
+        return(self.prev.page.first_position_of_link_text(self.link_text))
+
+    def calculate_feature__count(self):
+        return(self.prev.page.num_of_occurance_of_link_text(self.link_text))
+
+    def process_link_for_open_list(self, classifier):
+        link_class = self._classify_link(classifier)
+        self.open_list_key = link_class
+        self.score = link_class
+
+    def set_score(self, classifier):
+        self.score = self._classify_link(classifier)
+
+    def update_open_list_key_to_merge_duplicate(self, duplicate):
+        average_key_value = ( self.open_list_key + duplicate.open_list_key ) / 2
+        self.open_list_key = max( average_key_value - LinkPageContainer.DUPLICATE_SUBTRACTING_FACTOR, 0.0 )
 
     def chain_as_str(self, new_lines=False):
         """Prints the current node, with all of its ancestors, that form the chain"""

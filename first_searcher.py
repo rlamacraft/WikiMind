@@ -11,7 +11,7 @@ def append_to_init_json(results):
     file = open('init.json', 'r')
     json_data = json.loads(file.read())
     file.close()
-    json_data["ML_depth_Two"] = {
+    json_data["ML_depthThree"] = {
         'counts'    : results.counts(),
         'positions' : results.positions(),
         'scores'    : results.rounded_scores()
@@ -66,7 +66,7 @@ def generate_random_goal(generated_random_start, depth, classifier, verbose = Fa
         links = []
         for (each_link_text, each_link_tag) in selected_link_container.page.links():
             new_container = LinkPageContainer(link_text=each_link_text, prev=selected_link_container)
-            new_container.calculate_score(classifier)
+            new_container.process_link_for_open_list(classifier)
             links.append(new_container)
         open_list.batch_push(links)
         selected_link = get_random_link_from_open_list(open_list)
@@ -93,6 +93,7 @@ def search(start, goal, classifier, verbose = False):
     just_give_up = 50000
     open_list = OpenList()
     closed_list = ClosedList()
+    start.process_link_for_open_list(classifier)
     open_list.push(start)
 
     while not open_list.is_empty() and len(open_list) < just_give_up:
@@ -102,7 +103,7 @@ def search(start, goal, classifier, verbose = False):
 
         for each_container in BatchWikipediaSearch(random_selection, verbose = False).containers:
             if verbose:
-                print(str(each_container.depth()) + ": " + str(round(each_container.score, 2)) + ": " + each_container.page.title + " from " + each_container.prev.link_text)
+                print(str(each_container.depth()) + ": " + str(each_container.score) + ": " + str(round(each_container.open_list_key, 2)) + ": " + each_container.page.title + " from " + each_container.prev.link_text)
             closed_list.append(each_container.title, each_container)
             open_list_additions = []
             for (each_link_text, each_link_anchor) in each_container.page.links():
@@ -111,9 +112,11 @@ def search(start, goal, classifier, verbose = False):
                 if found_chain:
                     report_match(each_link_container, goal)
                     closed_list.remove_chain(each_link_container.prev) # this is so we don't learn the good stuff as bad
+                    each_link_container.set_score(classifier)
                     return((each_link_container, closed_list))
                 else:
-                    each_link_container.calculate_score(classifier)
+                    each_link_container.process_link_for_open_list(classifier)
+                    # print(each_link_container.score)
                     open_list_additions.append(each_link_container)
             open_list.batch_push(open_list_additions)
     if verbose and len(open_list) >= just_give_up:
@@ -178,5 +181,5 @@ def generate_plot(collected_data, filename):
 if __name__ == "__main__":
     collected_data = Results()
     search_setup(collected_data)
-    # generate_plot(collected_data, 'firstSearchTestOutput.html')
+    generate_plot(collected_data, 'firstSearchTestOutput.html')
     # append_to_init_json(collected_data)
