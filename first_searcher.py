@@ -116,8 +116,8 @@ def search(start, goal, classifier, verbose = False):
                     return((each_link_container, closed_list))
                 else:
                     each_link_container.process_link_for_open_list(classifier)
-                    # print(each_link_container.score)
-                    open_list_additions.append(each_link_container)
+                    if each_link_container.depth() <= LinkPageContainer.CHAIN_MAX_DEPTH:
+                        open_list_additions.append(each_link_container)
             open_list.batch_push(open_list_additions)
     if verbose and len(open_list) >= just_give_up:
         print(str(len(open_list)))
@@ -127,7 +127,8 @@ def search(start, goal, classifier, verbose = False):
 
 def setup_classifier():
     (features_data_set, score_data_set) = format_data(load_data_from_init_json())
-    classifier = LinkClassifier(["counts", "positions"], ["3", "4", "10"])
+    classes = [str(i + 1) for i in range(LinkPageContainer.MAX_CLASS)]
+    classifier = LinkClassifier(["counts", "positions"], classes)
     classifier.learn(features_data_set, score_data_set)
     return(classifier)
 

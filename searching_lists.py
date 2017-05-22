@@ -134,13 +134,10 @@ class ClosedList():
 
 class ResultDataPoint():
 
-    def __init__(self, container, score_override=None):
+    def __init__(self, container, score):
         self.count = container.calculate_feature__count()
         self.position = container.calculate_feature__position()
-        if not score_override == None:
-            self.score = score_override
-        else:
-            self.score = container.score
+        self.score = score
         self.text = container.prev.page.title + " -> " + container.link_text + ": " + str(self.score)
 
 class Results():
@@ -156,12 +153,26 @@ class Results():
             return( round( log( len(useless_requests), 10 ) ** 4 ) )
         return(0)
 
+    def _calculate_succesful_score(self, container, chain_depth):
+        """Combines score and chain depth to produce a learning score,
+        with the output bounded by 0 and LinkPageContainer.MAX_CLASS as the input score
+        is to prevent predictions wandering out of this window with each iteration of the learning process
+        """
+        if chain_depth <= 0 or chain_depth > LinkPageContainer.CHAIN_MAX_DEPTH:
+            raise ValueError("0 < chain_depth <= LinkPageContainer.CHAIN_MAX_DEPTH")
+        if container.score <= 0 or container.score > LinkPageContainer.MAX_CLASS:
+            raise ValueError("0 < container.score <= LinkPageContainer.MAX_CLASS")
+        chain_depth_scalar = (LinkPageContainer.MAX_CLASS / 2) / LinkPageContainer.CHAIN_MAX_DEPTH
+        offset = chain_depth_scalar * chain_depth
+        scale = container.score / 2
+        return(floor(scale + offset))
+
     def learn_succesful_chain(self, container, verbose = False):
         loop = container
         chain_depth = container.depth() + 1
         while not loop.prev.prev == None:
-            score = chain_depth + loop.score
-            self.data.append(ResultDataPoint(loop))
+            learning_score = self._calculate_succesful_score(loop, chain_depth)
+            self.data.append(ResultDataPoint(loop, learning_score))
             if verbose:
                 print("learnt: " + loop.link_text + " from the successful chain.")
             loop = loop.prev
@@ -172,7 +183,7 @@ class Results():
         while learnt_count < count:
             try:
                 random_container = useless_requests.pop_random()
-                self.data.append(ResultDataPoint(random_container, score_override=LinkPageContainer.MAX_DEFAULT_CLASS))
+                self.data.append(ResultDataPoint(random_container, LinkPageContainer.MAX_CLASS))
                 if verbose:
                     print("learnt: " + random_container.link_text + " from the useless requests.")
                 learnt_count += 1

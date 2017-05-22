@@ -10,8 +10,9 @@ from enum import Enum
 class LinkPageContainer:
     """Wrapper container for a link, its parsed page, and associated data. Acts as a single node in a chain of links."""
 
-    MAX_DEFAULT_CLASS = 100
-    DUPLICATE_SUBTRACTING_FACTOR = 0.2
+    MAX_CLASS = 100
+    DUPLICATE_SUBTRACTING_FACTOR = 0.05
+    CHAIN_MAX_DEPTH = 20
 
     def __init__(self, link_text = None, page = None, prev = None, score= None):
         if not link_text == None:
@@ -66,7 +67,7 @@ class LinkPageContainer:
     def _classify_link(self, classifier):
         """Classify the current link, based on the data collected, using the machine-learning classifier"""
         if self.prev == None or self.link_text == None or self.prev.page == None:
-            return(LinkPageContainer.MAX_DEFAULT_CLASS)
+            return(LinkPageContainer.MAX_CLASS)
         position = self.calculate_feature__position()
         count = self.calculate_feature__count()
         return(classifier.predict([count, position]))
@@ -86,7 +87,7 @@ class LinkPageContainer:
         self.score = self._classify_link(classifier)
 
     def update_open_list_key_to_merge_duplicate(self, duplicate):
-        average_key_value = ( self.open_list_key + duplicate.open_list_key ) / 2
+        average_key_value = min( self.open_list_key, duplicate.open_list_key )
         self.open_list_key = max( average_key_value - LinkPageContainer.DUPLICATE_SUBTRACTING_FACTOR, 0.0 )
 
     def chain_as_str(self, new_lines=False):
